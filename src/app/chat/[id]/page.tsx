@@ -1,36 +1,42 @@
+// app/chat/[id]/page.tsx
 "use client";
 
-import { useState } from "react";
+import { use } from "react"; // ✅ new React hook
+import { useEffect, useState } from "react";
 import { trpc } from "@/utils/trpc";
-import ChatInput from "@/components/Chat/ChatInput";
 import ChatWindow from "@/components/Chat/ChatWindow";
-import { useParams } from "next/navigation";
+import ChatInput from "@/components/Chat/ChatInput";
 
-export default function ChatPage() {
-  const params = useParams();
-  const sessionId = Number(params.id); // Get session id from URL
-  const { data: messages, isLoading } = trpc.chat.getMessages.useQuery({
-    sessionId,
-  });
+export default function ChatPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params); // ✅ unwrap the promise
+  const sessionId = Number(id);
 
-  if (isLoading) return <p>Loading messages...</p>;
+  const { data: messagesData } = trpc.chat.getMessages.useQuery({ sessionId });
+  const [messages, setMessages] = useState(messagesData || []);
 
-  // Narrow types for ChatWindow
-  const formattedMessages = (messages || []).map((msg) => ({
-    id: msg.id,
-    sender: msg.sender as "user" | "ai", // cast string to literal
-    content: msg.content,
-  }));
+  useEffect(() => {
+    if (messagesData) setMessages(messagesData);
+  }, [messagesData]);
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">Chat Session {sessionId}</h1>
-
-      {/* Chat window */}
-      <ChatWindow messages={formattedMessages} />
-
-      {/* Input to send new message */}
-      <ChatInput sessionId={sessionId} />
+    <div className="max-w-3xl mx-auto p-6 flex flex-col gap-4">
+      <ChatWindow
+        messages={messages.map((m) => ({
+          ...m,
+          sender: m.sender as "user" | "ai", // ✅ cast to union
+        }))}
+      />
+      <ChatInput
+        sessionId={sessionId}
+        messages={messages.map((m) => ({
+          ...m,
+          sender: m.sender as "user" | "ai",
+        }))}
+      />
     </div>
   );
 }
