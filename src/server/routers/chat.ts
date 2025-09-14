@@ -1,8 +1,12 @@
-// src/server/routers/chat.ts
 import { router, publicProcedure } from "../trpc";
 import { z } from "zod";
 import { prisma } from "../db";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
 
 export const chatRouter = router({
   getSessions: publicProcedure.query(async () => {
@@ -37,23 +41,22 @@ export const chatRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        const messages = [
+        const messages: ChatMessage[] = [
           {
-            role: "system",
+            role: "assistant",
             content:
               "You are an AI career counselor. Provide thoughtful, practical career advice.",
           },
-          ...input.context,
+          ...input.context.map((msg): ChatMessage => ({
+            role: msg.role,
+            content: msg.content,
+          })),
           { role: "user", content: input.message },
         ];
 
-        // Call OpenRouter API
         const response = await axios.post(
           "https://openrouter.ai/api/v1/chat/completions",
-          {
-            model: "mistralai/mistral-7b-instruct", // free and fast model
-            messages,
-          },
+          { model: "mistralai/mistral-7b-instruct", messages },
           {
             headers: {
               Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -62,12 +65,16 @@ export const chatRouter = router({
           }
         );
 
-        const reply = response.data.choices[0]?.message?.content;
-        console.log("AI reply:", reply);
-
+        const reply: string | undefined = response.data.choices?.[0]?.message?.content;
         return reply ?? "Sorry, I cannot respond.";
-      } catch (error: any) {
-        console.error("OpenRouter error:", error.response?.data || error.message);
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error)) {
+          console.error("OpenRouter error:", error.response?.data || error.message);
+        } else if (error instanceof Error) {
+          console.error("OpenRouter error:", error.message);
+        } else {
+          console.error("OpenRouter error:", error);
+        }
         return "Sorry, I failed to respond.";
       }
     }),
