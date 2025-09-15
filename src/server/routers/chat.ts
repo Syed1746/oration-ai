@@ -1,7 +1,7 @@
 import { router, publicProcedure } from "../trpc";
 import { z } from "zod";
 import { prisma } from "../db";
-import axios, { AxiosError } from "axios";
+import axios from "axios";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -10,6 +10,9 @@ interface ChatMessage {
 
 export const chatRouter = router({
   getSessions: publicProcedure.query(async () => {
+    // 🔍 Debug log for DATABASE_URL
+    console.log("DATABASE_URL:", process.env.DATABASE_URL);
+
     return prisma.chatSession.findMany({
       orderBy: { createdAt: "desc" },
     });
@@ -65,16 +68,11 @@ export const chatRouter = router({
           }
         );
 
-        const reply: string | undefined = response.data.choices?.[0]?.message?.content;
+        const reply: string | undefined =
+          response.data.choices?.[0]?.message?.content;
         return reply ?? "Sorry, I cannot respond.";
       } catch (error: unknown) {
-        if (axios.isAxiosError(error)) {
-          console.error("OpenRouter error:", error.response?.data || error.message);
-        } else if (error instanceof Error) {
-          console.error("OpenRouter error:", error.message);
-        } else {
-          console.error("OpenRouter error:", error);
-        }
+        console.error("OpenRouter error:", error);
         return "Sorry, I failed to respond.";
       }
     }),
